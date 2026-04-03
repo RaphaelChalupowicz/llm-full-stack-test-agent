@@ -111,7 +111,7 @@ def patch_package_json_for_jest(project_root: str) -> None:
     """
     Updates the package.json in the given project_root to configure Jest for testing, including backing up the original file, setting up test scripts, and adding Jest-specific settings.
     Args:
-        project_root (str): The root directory of the project whose package.json should be patched for
+        project_root (str): The root directory of the project whose package.json should be patched for Jest configuration.
     """
 
     print("Patching package.json for Jest...")

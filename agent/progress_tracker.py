@@ -106,7 +106,10 @@ class ProgressTracker:
 
         self._data = {}
         if os.path.exists(self._path):
-            os.remove(self._path)
+            try:
+                os.remove(self._path)
+            except OSError:
+                pass
 
 
     @property

@@ -2,6 +2,14 @@ import re
 
 
 def extract_relevant_jest_error(output: str) -> str:
+    """
+    Extracts the most relevant portion of a Jest test failure output for classification.
+    Args:
+        output (str): The full stdout/stderr from a Jest test run.
+    Returns:
+        str: A snippet of the error message that is most relevant for failure classification.
+    """
+
     lines = output.splitlines()
 
     # Prefer the detailed failure section starting at first bullet failure
@@ -17,6 +25,14 @@ def extract_relevant_jest_error(output: str) -> str:
 
 
 def classify_failure(error_snippet: str) -> str:
+    """
+    Classifies a test failure based on its error message.
+    Args:
+        error_snippet (str): A snippet of the error message to classify.
+    Returns:
+        str: The classification of the failure.
+    """
+
     lowered = error_snippet.lower()
 
     if "element type is invalid" in lowered:
@@ -57,6 +73,14 @@ def classify_failure(error_snippet: str) -> str:
 
 
 def build_repair_hint(failure_type: str) -> str:
+    """
+    Provides a human-readable hint for how to fix a test failure based on its classification.
+    Args:
+        failure_type (str): The classification of the failure.
+    Returns:
+        str: A hint message for fixing the failure.
+    """
+
     hints = {
         "react_invalid_element": (
             "Likely cause: a mocked React component is undefined due to incorrect default export mocking.\n"
@@ -105,6 +129,15 @@ def build_repair_hint(failure_type: str) -> str:
 
 
 def apply_local_failure_fix(current_test_code: str, failure_type: str) -> str | None:
+    """
+    Applies a simple local code transformation to fix common fragile test patterns based on failure classification.
+    Args:
+        current_test_code (str): The current source code of the test file.
+        failure_type (str): The classification of the failure.
+    Returns:
+        str | None: The updated test code if a fix was applied, otherwise None.
+    """
+    
     updated = current_test_code
 
     if failure_type == "fragile_call_count":

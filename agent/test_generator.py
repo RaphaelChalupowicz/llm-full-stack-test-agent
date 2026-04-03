@@ -38,6 +38,15 @@ REPAIR_TEMPERATURE = _env_float("OPENAI_TEMPERATURE_REPAIR", 0)
 
 
 def _call_llm(client: OpenAI, **kwargs):
+    """
+    Calls the OpenAI LLM with the specified parameters.
+    Args:
+        client (OpenAI): The OpenAI client instance.
+        **kwargs: The keyword arguments for the LLM call.
+    Returns:
+        The response from the LLM.
+    """
+
     try:
         return client.chat.completions.create(**kwargs)
     except AuthenticationError:
@@ -59,6 +68,12 @@ def _call_llm(client: OpenAI, **kwargs):
 
 
 def get_client() -> OpenAI:
+    """
+    Creates and returns an OpenAI client instance.
+    Returns:
+        OpenAI: The initialized OpenAI client.
+    """
+
     api_key = os.getenv("OPENAI_API_KEY")
     base_url = os.getenv("OPENAI_BASE_URL")
     organization = os.getenv("OPENAI_ORGANIZATION")
@@ -80,6 +95,14 @@ def extract_text(response) -> str:
 
 
 def strip_code_fences(text: str) -> str:
+    """
+    Strips markdown code fences from the given text.
+    Args:
+        text (str): The input text that may contain markdown code fences.
+    Returns:
+        str: The text with code fences removed.
+    """
+
     text = text.strip()
     text = re.sub(r"^```[a-zA-Z0-9_-]*\n", "", text)
     text = re.sub(r"\n```$", "", text)
@@ -93,6 +116,7 @@ def compute_relative_import(file_relative: str) -> str:
     to:
       src/<original file>
     """
+
     stripped = file_relative.replace("src/", "", 1)
     folder_depth = stripped.count("/")
     ups = "../" * (folder_depth + 2)
@@ -101,12 +125,29 @@ def compute_relative_import(file_relative: str) -> str:
 
 
 def compute_generated_test_relpath(file_relative: str) -> str:
+    """
+    Computes the relative path for the generated test file.
+    Args:
+        file_relative (str): The relative path to the original file.
+    Returns:
+        str: The relative path to the generated test file.
+    """
+
     stripped = file_relative.replace("src/", "", 1)
     base, ext = stripped.rsplit(".", 1)
     return f"tests/generated/{base}.test.{ext}"
 
 
 def cleanup_generated_test(code: str, file_relative: str) -> str:
+    """
+    Cleans up the generated test code by fixing import paths and removing unnecessary boilerplate.
+    Args:
+        code (str): The generated test code.
+        file_relative (str): The relative path to the original file.
+    Returns:
+        str: The cleaned-up test code.
+    """
+
     code = strip_code_fences(code)
 
     correct_import = compute_relative_import(file_relative)
@@ -158,6 +199,16 @@ def cleanup_generated_test(code: str, file_relative: str) -> str:
 
 
 def should_generate_test(file_absolute: str, file_relative: str, verbose: bool = False) -> tuple[bool, str]:
+    """
+    Determines whether a test should be generated for the given file.
+    Args:
+        file_absolute (str): The absolute path to the file.
+        file_relative (str): The relative path to the file.
+        verbose (bool): Whether to print verbose output.
+    Returns:
+        tuple[bool, str]: A tuple containing a boolean indicating whether to generate a test, and a reason for the decision.
+    """
+
     with open(file_absolute, encoding="utf-8") as f:
         source = f.read()
 
@@ -222,6 +273,14 @@ def should_generate_test(file_absolute: str, file_relative: str, verbose: bool =
 
 
 def build_system_prompt(strategy: str) -> str:
+    """
+    Builds the system prompt for the LLM based on the testing strategy.
+    Args:
+        strategy (str): The testing strategy (e.g., 'page', 'component', 'redux_thunk', etc.).
+    Returns:
+        str: The system prompt.
+    """
+    
     base = (
         "You are a senior frontend engineer. "
         "You write clean, realistic Jest + React Testing Library tests for React TypeScript projects. "
@@ -293,6 +352,16 @@ def build_user_prompt(
     source_code: str,
     strategy: str,
 ) -> str:
+    """
+    Builds the user prompt for the LLM based on the file and testing strategy.
+    Args:
+        file_relative (str): The relative path to the file being tested.
+        source_code (str): The source code of the file being tested.
+        strategy (str): The testing strategy (e.g., 'page', 'component', 'redux_thunk', etc.).
+    Returns:
+        str: The user prompt.
+    """
+
     correct_import = compute_relative_import(file_relative)
     stripped = file_relative.replace("src/", "", 1)
     folder_depth = stripped.count("/")
@@ -355,6 +424,17 @@ def generate_test(
     strategy: str,
     verbose: bool = False,
 ) -> str:
+    """
+    Generates a test file for the given source file and testing strategy.
+    Args:
+        file_absolute (str): The absolute path to the source file.
+        file_relative (str): The relative path to the source file.
+        strategy (str): The testing strategy (e.g., 'page', 'component', 'redux_thunk', etc.).
+        verbose (bool): Whether to print verbose output.
+    Returns:
+        str: The generated test code.
+    """
+
     with open(file_absolute, encoding="utf-8") as f:
         source_code = f.read()
 
@@ -402,6 +482,20 @@ def fix_test_after_failure(
     repair_hint: str,
     verbose: bool = False,
 ) -> str:
+    """
+    Fixes a failing Jest + TypeScript test.
+    Args:
+        file_absolute (str): The absolute path to the file under test.
+        file_relative (str): The relative path to the file under test.
+        current_test_code (str): The current test code.
+        jest_error_output (str): The error output from Jest.
+        failure_type (str): The type of failure.
+        repair_hint (str): A hint for repairing the test.
+        verbose (bool): Whether to print verbose output.
+    Returns:
+        str: The fixed test code.
+    """
+
     with open(file_absolute, encoding="utf-8") as f:
         source_code = f.read()
 

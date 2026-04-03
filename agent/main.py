@@ -43,8 +43,11 @@ DEFAULT_MAX_FILES = _env_int("DEFAULT_MAX_FILES", 2)
 DEFAULT_COVERAGE_PATH = os.getenv("DEFAULT_COVERAGE_PATH", "coverage/coverage-summary.json")
 TEST_TIMEOUT_SECONDS = _env_int("TEST_TIMEOUT_SECONDS", 120)
 
-# exit early if OpenAI library is not installed, since it's required for the agent to run at all
 def validate_api_key() -> None:
+    """
+    Validates that the OpenAI API key is configured.
+    """
+
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key or api_key == "your_api_key_here":
         print("ERROR: OPENAI_API_KEY is not configured.")
@@ -53,28 +56,55 @@ def validate_api_key() -> None:
         sys.exit(1)
 
 
-# ensure the output directory for generated tests exists, and return its path
 def ensure_output_dir(project_root: str) -> str:
+    """
+    Ensures the output directory for generated tests exists, and returns its path.
+    Args:
+        project_root (str): The project root path.
+    Returns:
+        str: The path to the output directory.
+    """
+
     output_dir = os.path.join(project_root, "tests", "generated")
     os.makedirs(output_dir, exist_ok=True)
     return output_dir
 
 
-# return the text content of a file given its path
 def file_text(path: str) -> str:
+    """
+    Returns the text content of a file given its path.
+    Args:
+        path (str): The file path.
+    Returns:
+        str: The file content.
+    """
+
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
 
 
-# save the generated test code to the specified output path
 def save_test(output_path: str, test_code: str) -> None:
+    """
+    Saves the generated test code to the specified output path.
+    Args:
+        output_path (str): The file path where the test code will be saved.
+        test_code (str): The test code to save.
+    """
+
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(test_code)
 
 
-# given a source file path, return the corresponding test file path
 def get_test_filename(file_rel: str) -> str:
+    """
+    Returns the filename for the corresponding test file.
+    Args:
+        file_rel (str): The relative path to the source file.
+    Returns:
+        str: The relative path to the test file.
+    """
+
     relative_no_src = file_rel.replace("src/", "", 1)
     base, ext = os.path.splitext(relative_no_src)
     return f"{base}.test{ext}"
@@ -89,6 +119,18 @@ def process_one_gap(
     tests_output_dir: str,
     verbose: bool = False,
 ) -> bool:
+    """
+    Processes a single coverage gap by generating a test for it.
+    Args:
+        gap (dict): The coverage gap information.
+        project_root (str): The project root path.
+        test_command (list[str]): The test command to run.
+        tests_output_dir (str): The directory where generated tests will be saved.
+        verbose (bool, optional): Whether to print verbose output. Defaults to False.
+    Returns:
+        bool: True if the test was generated and passed, False otherwise.
+    """
+
     file_rel = gap["file_relative"]
     file_abs = gap["file_absolute"]
 

@@ -7,7 +7,12 @@ import sys
 def resolve_command(command: list[str]) -> list[str]:
     """
     Ensures the test command resolves correctly across platforms.
+    Args:
+        command (list[str]): The original command list to resolve.
+    Returns:
+        list[str]: The resolved command list, with "npm" replaced by the full path to npm.cmd on Windows if necessary.
     """
+    
     if not command:
         return command
 
@@ -28,12 +33,16 @@ def run_single_test(
     timeout_seconds: int = 120,
 ) -> tuple[bool, str]:
     """
-    Executes a single test file using the project's configured test command.
-    This function intentionally runs tests WITHOUT coverage.
-    
+    Runs a single test file using the specified test command, ensuring cross-platform compatibility and handling timeouts and command resolution.
+    Args:
+        project_root (str): The root directory of the project where the test should be run.
+        test_command (list[str]): The base command to run the test (e.g. ["npm", "test"]).
+        test_relative_path (str): The relative path to the test file to run.
+        timeout_seconds (int): The maximum time to allow for the test command to run before timing out.
     Returns:
-        (passed: bool, output: str)
+        tuple[bool, str]: A tuple containing a boolean indicating test success, and a string
     """
+    
     # Ensure command works on current OS (especially Windows)
     command = resolve_command(test_command) + [
         "--watchAll=false",

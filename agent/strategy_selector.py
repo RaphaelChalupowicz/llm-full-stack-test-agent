@@ -1,8 +1,16 @@
 import os
 
 
-# given a file path select a testing strategy based on its location and name
 def select_strategy(file_relative: str) -> str:
+    """
+    Selects a testing strategy based on the file location and name.
+    Args:
+        file_relative (str): The relative path to the file.
+    Returns:
+        str: The selected testing strategy.
+
+    """
+
     path = file_relative.replace("\\", "/")
     name = os.path.basename(path)
     name_lower = name.lower()

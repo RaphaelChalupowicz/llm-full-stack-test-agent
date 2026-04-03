@@ -38,6 +38,15 @@ SKIP_PATTERNS = _env_csv(
 
 
 def normalize_path(abs_path: str, project_root: str) -> str:
+    """
+    Normalizes a file path to be relative to the project root.
+    Args:
+        abs_path (str): The absolute file path.
+        project_root (str): The project root path.
+    Returns:
+        str: The normalized relative file path.
+    """
+
     abs_path = abs_path.replace("\\", "/")
     project_root = project_root.replace("\\", "/")
     if abs_path.startswith(project_root):
@@ -47,15 +56,27 @@ def normalize_path(abs_path: str, project_root: str) -> str:
 
 
 def should_skip(file_path: str) -> bool:
+    """
+    Determines if a file should be skipped based on configured skip patterns.
+    Args:
+        file_path (str): The file path to check.
+    Returns:
+        bool: True if the file should be skipped, False otherwise.
+    """
+
     normalized = file_path.replace("\\", "/")
     return any(pattern in normalized for pattern in SKIP_PATTERNS)
 
 
 def coverage_is_empty(coverage_json_path: str) -> bool:
     """
-    Returns True when coverage-summary.json is missing or contains only an
-    empty/Unknown total section with no per file entries.
+    Determines if the coverage report is effectively empty, meaning it has no per-file entries or all files are marked as 0% covered. This can happen when tests haven't been run or coverage data is missing.
+    Args:
+        coverage_json_path (str): The file path to the coverage-summary.json report.
+    Returns:
+        bool: True if coverage is empty or missing, False if there are real files with coverage
     """
+
     if not os.path.exists(coverage_json_path):
         return True
 
@@ -76,10 +97,13 @@ def coverage_is_empty(coverage_json_path: str) -> bool:
 
 def discover_source_files(project_root: str) -> list[str]:
     """
-    Fallback mode:
-    If coverage-summary.json has no per file entries, scan src/ and treat
-    relevant source files as 0% covered candidates.
+    Discovers all source files in the project root.
+    Args:
+        project_root (str): The project root path.
+    Returns:
+        list[str]: A list of relative file paths.
     """
+
     src_root = os.path.join(project_root, "src")
     if not os.path.isdir(src_root):
         return []
@@ -104,10 +128,14 @@ def discover_source_files(project_root: str) -> list[str]:
 
 def get_coverage_gaps(coverage_json_path: str, project_root: str) -> list[dict]:
     """
-    Reads real coverage gaps when coverage-summary.json contains per file entries.
-    If the coverage file is missing or empty,
-    falls back to scanning src/ and treating files as 0% coverage gaps.
+    Gets the list of coverage gaps based on the coverage report and project files.
+    Args:
+        coverage_json_path (str): The file path to the coverage-summary.json report.
+        project_root (str): The project root path.
+    Returns:
+        list[dict]: A list of dictionaries representing the coverage gaps.
     """
+    
     if coverage_is_empty(coverage_json_path):
         print("Coverage missing or empty → using source scan fallback")
 

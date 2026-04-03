@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from progress_tracker import ProgressTracker
 from strategy_selector import select_strategy
 from test_generator import (
     should_generate_test,
@@ -116,6 +117,7 @@ def process_one_gap(
     project_root: str,
     test_command: list[str],
     tests_output_dir: str,
+    tracker: ProgressTracker,
     verbose: bool = False,
 ) -> bool:
     """
@@ -133,6 +135,15 @@ def process_one_gap(
     file_rel = gap["file_relative"]
     file_abs = gap["file_absolute"]
 
+    # Skip files that were already handled in a previous run
+    existing_status = tracker.get_status(file_rel)
+    if existing_status == "pass":
+        print(f"↷ ALREADY PASSED (skipping) — {file_rel}\n")
+        return True
+    if existing_status == "skip":
+        print(f"↷ ALREADY SKIPPED (skipping) — {file_rel}\n")
+        return False
+
     # select a testing strategy based on the file location and name
     strategy = select_strategy(file_rel)
 
@@ -143,6 +154,7 @@ def process_one_gap(
         print(f"✗ SKIP - {file_rel}")
         print(f"         Strategy: {strategy}")
         print(f"         Reason: {reason}\n")
+        tracker.mark(file_rel, "skip")
         return False
     else:
         print(f"✓ GENERATING - {file_rel}")
@@ -168,6 +180,7 @@ def process_one_gap(
     except Exception as err:
         print(f"         FAILED DURING GENERATION - {file_rel}")
         print(f"         Error: {err}\n")
+        tracker.mark(file_rel, "fail")
         return False
 
     unchanged_count = 0
@@ -187,10 +200,12 @@ def process_one_gap(
         if "INFRA_ERROR:" in output:
             print(f"         INFRA ERROR - {test_relative_path_for_runner}")
             print(output)
+            tracker.mark(file_rel, "fail")
             return False
 
         if passed:
             print(f"         PASS - {test_relative_path_for_runner}\n")
+            tracker.mark(file_rel, "pass")
             return True
 
         print(f"         FAIL - {test_relative_path_for_runner}")
@@ -233,17 +248,19 @@ def process_one_gap(
 
             if before_fix == after_fix:
                 unchanged_count += 1
-                print("         Repair returned identical code.")
+                print("        ✗ Repair returned identical code.")
             else:
                 unchanged_count = 0
-                print("         Repair changed the file.")
+                print("        ✓ Repair changed the file.")
 
         except Exception as err:
             print(f"         FAILED DURING REPAIR - {file_rel}")
             print(f"         Error: {err}\n")
+            tracker.mark(file_rel, "fail")
             return False
 
     print(f"         GAVE UP AFTER {MAX_FIX_ATTEMPTS} ATTEMPTS - {file_rel}\n")
+    tracker.mark(file_rel, "fail")
     return False
 
 
@@ -274,6 +291,12 @@ def main() -> None:
         action="store_true",
         default=False,
         help="Print full LLM prompts and responses for debugging",
+    )
+    run_parser.add_argument(
+        "--reset-progress",
+        action="store_true",
+        default=False,
+        help="Clear saved progress and reprocess all files from scratch",
     )
 
     # define command line arguments for the "bootstrap" command
@@ -312,6 +335,13 @@ def main() -> None:
 
     tests_output_dir = ensure_output_dir(project_root)
 
+    tracker = ProgressTracker(tests_output_dir)
+    if args.reset_progress:
+        tracker.reset()
+        print("\nProgress cache cleared. All files will be re-processed.\n")
+    else:
+        print(f"\nProgress file: {tracker.path}")
+
     # get the list of coverage gaps from the coverage summary or source scan
     gaps = get_coverage_gaps(coverage_json_path, project_root)
     print(f"\n=== FOUND {len(gaps)} COVERAGE GAPS ===\n")
@@ -325,6 +355,15 @@ def main() -> None:
 
     # process each gap and generate a test for it
     for gap in gaps:
+        file_rel = gap["file_relative"]
+
+        # Already handled in a previous run — notify but don't consume quota
+        existing_status = tracker.get_status(file_rel)
+        if existing_status in ("pass", "skip"):
+            label = "ALREADY PASSED" if existing_status == "pass" else "ALREADY SKIPPED"
+            print(f"↷ {label} (skipping) — {file_rel}\n")
+            continue
+
         if attempted_count >= args.max_files:
             break
 
@@ -335,6 +374,7 @@ def main() -> None:
             project_root=project_root,
             test_command=profile["test_command"],
             tests_output_dir=tests_output_dir,
+            tracker=tracker,
             verbose=args.verbose,
         )
         if test_passed:

@@ -44,7 +44,6 @@ agent/
 ├── test_generator.py               # LLM generation and LLM repair loop
 ├── test_executor.py                # Runs generated tests
 ├── failure_classifier.py           # Classifies errors and provides deterministic hints/fixes
-├── coverage_executor.py            # Runs project coverage command when needed
 └── bootstrap_jest.py               # Bootstraps Jest in projects without test setup
 
 (target project (--project /path/to/react-app) )

@@ -68,8 +68,8 @@ agent/
 ├── bitbucket_client.py             # Bitbucket REST API client
 └── integration_reporter.py         # Orchestrates Jira + Bitbucket reporting
 
-(target project (--project /path/to/react-app) )
-├── src/                            # (front end cmps)
+(target project (--project /path/to/react-app))
+├── src/                            # frontend components
 ├── package.json
 ├── coverage/coverage-summary.json  # Optional
 └── tests/generated/                # generated tests

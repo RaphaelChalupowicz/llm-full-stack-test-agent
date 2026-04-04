@@ -1,10 +1,10 @@
-# LLM React Test Generator
+# 🤖 LLM React Test Generator
 
-An autonomous agent that generates **working tests** for React + TypeScript frontend using Jest and C# backends (xUnit + Moq) using LLM driven repair loops and built in Jira + Bitbucket integration.
+An autonomous agent that generates **working tests** for React + TypeScript frontend (Jest/Vitest detection) and C# backends (xUnit + Moq), with LLM driven repair loops and optional built in Jira + Bitbucket integration.
 
 ---
 
-## What it does
+## 🚀 What it does
 
 Given a React project, the agent:
 
@@ -17,16 +17,18 @@ Given a React project, the agent:
 7. If the test fails → analyzes the error and fixes it (deterministic AND LLM repair loop)
 8. Retries until the test passes or max attempts are reached
 9. **Saves progress** so reruns skip already passing files
-10. **On success** → opens a Jira issue + Bitbucket PR and links them
-11. **On failure** → asks the LLM to explain the root cause, opens a "needs-work" Jira issue + draft PR with the developer guide
+10. **On success** → can open a Jira issue + Bitbucket PR and link them
+11. **On failure** → can ask the LLM to explain the root cause, then open a "needs-work" Jira issue + draft PR with a developer guide
 
 The result: real, passing tests committed to your repo as PRs, with Jira issues tracking coverage gaps.
 
 For C# backends (`run-csharp`), the same lifecycle applies: generate -> run (`dotnet test`) -> repair -> retry -> report to Jira/Bitbucket.
 
+Jira/Bitbucket steps are enabled only when the corresponding credentials are configured and `--no-integration` is not used.
+
 ---
 
-## Why this is different
+## ✨ Why this is different
 
 Most AI tools generate tests once and stop.
 
@@ -47,7 +49,7 @@ exhausted retries → LLM explains root cause & developer steps
 
 ---
 
-## Architecture
+## 🏗️ Architecture
 
 ```
 agent/
@@ -89,7 +91,7 @@ agent/
 
 ---
 
-## Requirements
+## 📋 Requirements
 
 - Python 3.10+
 - Node.js (with npm)
@@ -99,50 +101,68 @@ agent/
 
 ---
 
-## Setup
+## ⚙️ Setup
+
+1. Clone project
 
 ```bash
-1. clone project
-
 git clone https://github.com/RaphaelChalupowicz/llm-full-stack-test-agent.git
 cd llm-full-stack-test-agent
+```
 
 2. Create and activate a Python virtual environment
 
+```bash
 python -m venv venv
+```
 
-Windows:
-venv\Scripts\activate
+Windows (PowerShell):
+
+```powershell
+.\venv\Scripts\Activate.ps1
+```
+
 macOS/Linux:
+
+```bash
 source venv/bin/activate
+```
 
 3. Install dependencies
 
+```bash
 pip install -r requirements.txt
+```
 
 4. Copy environment template
 
+```bash
 cp .env.example .env
-
-5. Edit .env and set OPENAI_API_KEY and optionally Jira/Bitbucket credentials
 ```
+
+5. Edit `.env` and set at least `OPENAI_API_KEY`.
 
 You can tune runtime behavior without code changes:
 
 ```env
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-5.4-mini
+OPENAI_BASE_URL=
+OPENAI_ORGANIZATION=
+OPENAI_MAX_TOKENS_EXPLAIN=1500
 DEFAULT_COVERAGE_PATH=coverage/coverage-summary.json
 DEFAULT_MAX_FILES=2
 MAX_FIX_ATTEMPTS=3
 TEST_TIMEOUT_SECONDS=120
 COVERAGE_THRESHOLD=80
 COVERAGE_SKIP_PATTERNS=types/,assets/,.d.ts,main.tsx,vite-env,index.css,rootReducer.ts,store.ts
+CSHARP_MAX_TOKENS_GENERATE=2600
+CSHARP_MAX_TOKENS_REPAIR=3200
 ```
 
 ---
 
-## Usage
+## 🧪 Usage
 
 1. Bootstrap a project (if needed)
 
@@ -191,7 +211,7 @@ CLI arguments:
 | `--dry-run`        | off                              | Log what Jira/Bitbucket operations _would_ happen without calling any APIs |
 | `--no-integration` | off                              | Disable Jira and Bitbucket even if credentials are configured              |
 
-### Progress tracking
+### 💾 Progress tracking
 
 By default, the agent saves results to `tests/generated/.progress.json`. On subsequent runs, files marked as `pass` or `skip` are skipped automatically - no wasted LLM calls after a crash or incremental run.
 
@@ -200,7 +220,7 @@ By default, the agent saves results to `tests/generated/.progress.json`. On subs
 python agent/main.py run --project /path/to/react-app --reset-progress
 ```
 
-### Debugging with `--verbose`
+### 🔎 Debugging with `--verbose`
 
 ```bash
 python agent/main.py run --project /path/to/react-app --verbose --max-files 1
@@ -208,9 +228,9 @@ python agent/main.py run --project /path/to/react-app --verbose --max-files 1
 
 ---
 
-## Jira + Bitbucket Integration
+## 🔗 Jira + Bitbucket Integration
 
-### Setup
+### 🛠️ Setup
 
 Add these variables to your `.env` (all are optional - any missing group disables that integration):
 
@@ -250,29 +270,35 @@ CSHARP_BITBUCKET_DEFAULT_BRANCH=main
 CSHARP_BITBUCKET_REVIEWERS=
 ```
 
-### What happens on a successful test
+### ✅ What happens on a successful test
 
-1. The passing test is committed to a new branch `test/auto/{file-slug}` in the Bitbucket repo
+1. The passing test is committed to a new branch in the Bitbucket repo:
+
+- `test/auto/{file-slug}` when Jira is not enabled
+- `test/auto/{jira-key-lower}-{file-slug}` when a Jira issue is created first
+
 2. A Jira issue is created: `[AutoTest] ✅ Tests added for src/components/Button.tsx`
    - Labels: `auto-test`, `test-coverage`, `frontend` (or `backend` for `run-csharp`)
    - Description includes **what changed** (file/path/strategy), test preview, and framework details
 3. A Bitbucket PR is opened from `test/auto/...` → `main` with the Jira key in the description
 4. The Bitbucket PR URL is attached as a remote link on the Jira issue
 
-### What happens when test generation fails
+### ⚠️ What happens when test generation fails
 
 1. The last test attempt is committed to a new branch `test/needs-work/{file-slug}`
 2. **The LLM is asked to explain the failure** and provide a developer step by step guide
 3. The analysis is printed to the terminal so developers see it immediately
 4. A Jira issue is created: `[AutoTest] ⚠️ Manual test needed for src/components/Button.tsx`
-   - Labels: `auto-test`, `needs-work`
-   - Description includes **what changed**, **failure details** (type + latest error), and **approach to fix** from LLM analysis
+
+- Labels: `auto-test`, `needs-work`, and domain label (`frontend` or `backend`)
+- Description includes **what changed**, **failure details** (type + latest error), and **approach to fix** from LLM analysis
+
 5. A **draft** Bitbucket PR is opened with the LLM analysis in the description
 6. The draft PR URL is attached as a remote link on the Jira issue
 
 The same Jira/PR enrichment is used for C# failures from `run-csharp`, including the latest `dotnet build/test` failure context and repair approach.
 
-### Dry-run mode
+### 🧰 Dry-run mode
 
 Test the integration wiring without making any API calls:
 
@@ -282,15 +308,15 @@ python agent/main.py run --project /path/to/react-app --dry-run
 
 ---
 
-## Demo
+## 🎬 Demo
 
 ![demo](./demo.gif)
 
-### C# Demo
+### 💻 C# Demo
 
 ![csharp-demo](./demo-csharp.gif)
 
-### Jira + Bitbucket Demo
+### 🧩 Jira + Bitbucket Demo
 
 <table>
   <tr>
@@ -303,7 +329,7 @@ python agent/main.py run --project /path/to/react-app --dry-run
   </tr>
 </table>
 
-## Example Output
+## 🧾 Example Output
 
 ```
 Analyzing project: /path/to/frontend
@@ -375,7 +401,7 @@ Failed/skipped: 2
 
 ---
 
-## Strategy detection
+## 🧠 Strategy detection
 
 | Path pattern                     | Strategy      | Approach                                          |
 | -------------------------------- | ------------- | ------------------------------------------------- |
@@ -390,7 +416,7 @@ Failed/skipped: 2
 
 ---
 
-## Failure classifier
+## 🩺 Failure classifier
 
 | Failure type             | Trigger                            | Repair action                         |
 | ------------------------ | ---------------------------------- | ------------------------------------- |
@@ -407,7 +433,7 @@ Failed/skipped: 2
 
 ---
 
-## Current Limitations
+## 🚧 Current Limitations
 
 - Frontend quality is optimized for React + TypeScript projects plain JavaScript projects are still experimental
 - Vitest support is partial. Jest is the primary flow
@@ -415,16 +441,16 @@ Failed/skipped: 2
 
 ---
 
-## Roadmap
+## 🗺️ Roadmap
 
-### V1 (finished)
+### ✅ V1 (finished)
 
 - Coverage aware front end test generation
 - Fallback source scanning
 - Bootstrap for test less projects
 - LLM and deterministic based repair loop
 
-### V2 (finished)
+### ✅ V2 (finished)
 
 - **C# integration** - `run-csharp` now supported
 - Progress tracking for crash recovery
@@ -439,6 +465,6 @@ Failed/skipped: 2
 - **Better Jira issue content** - issue descriptions include what changed, failure details, and suggested fix approach
 - **Stronger Jira/PR linking** - Jira key propagated into PR title/branch/commit and PR URL also posted back to Jira
 
-### V3 (planned)
+### 🔜 V3 (planned)
 
 - Multi agent system (generator + reviewer + fixer)

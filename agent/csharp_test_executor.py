@@ -17,7 +17,7 @@ def _run_dotnet(
 ) -> tuple[int, str]:
     """
     Run a ``dotnet`` command and return ``(returncode, combined_output)``.
-    Never raises on non-zero exit — callers decide how to handle failures.
+    Never raises on non-zero exit - callers decide how to handle failures.
 
     Args:
         args (list[str]): The arguments to pass to the dotnet CLI, e.g. ["build"] or ["test", "--filter", "FullyQualifiedName~MyTestClass"].
@@ -113,7 +113,7 @@ def run_csharp_test(
     Returns:
         tuple[bool, str]: A tuple of (success, output) where success is True if the test passed,
     """
-    # Build first — surface compile errors before trying to run
+    # Build first - surface compile errors before trying to run
     build_ok, build_output = build_test_project(
         test_project_dir, timeout_seconds=timeout_seconds
     )
@@ -145,7 +145,7 @@ _PROJECT_REF_MISSING_RE = re.compile(
 def is_project_reference_error(output: str) -> bool:
     """
     Return ``True`` when the build output indicates a broken
-    ``<ProjectReference>`` — e.g. the placeholder ``../YourProject.csproj``
+    ``<ProjectReference>`` - e.g. the placeholder ``../YourProject.csproj``
     was never replaced with a real project path.
 
     This is an infrastructure problem that the LLM cannot fix by editing

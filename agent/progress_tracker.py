@@ -98,6 +98,14 @@ class ProgressTracker:
         self._data[file_relative] = entry
         _save(self._path, self._data)
 
+    def get_jira_key(self, file_relative: str) -> str | None:
+        """Return the stored Jira issue key for a file, or None."""
+        return self._data.get(file_relative, {}).get("jira_key")
+
+    def get_pr_url(self, file_relative: str) -> str | None:
+        """Return the stored PR URL for a file, or None."""
+        return self._data.get(file_relative, {}).get("pr_url")
+
 
     def reset(self) -> None:
         """

@@ -2,6 +2,10 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from csharp_bootstrap import GENERATED_TESTS_DIR, bootstrap_csharp_test_project, repair_project_reference
+from csharp_parser import classify_csharp_file, detect_csharp_project_file, find_csharp_files
+from csharp_test_executor import extract_relevant_dotnet_error, is_project_reference_error, run_csharp_test
+from csharp_test_generator import explain_csharp_test_failure, fix_csharp_test, generate_csharp_test, infer_test_class_name, should_generate_csharp_test
 from progress_tracker import ProgressTracker
 from strategy_selector import select_strategy
 from test_generator import (
@@ -42,6 +46,7 @@ MAX_FIX_ATTEMPTS = _env_int("MAX_FIX_ATTEMPTS", 3)
 DEFAULT_MAX_FILES = _env_int("DEFAULT_MAX_FILES", 2)
 DEFAULT_COVERAGE_PATH = os.getenv("DEFAULT_COVERAGE_PATH", "coverage/coverage-summary.json")
 TEST_TIMEOUT_SECONDS = _env_int("TEST_TIMEOUT_SECONDS", 120)
+
 
 def validate_api_key() -> None:
     """
@@ -176,10 +181,10 @@ def process_one_gap(
             verbose=verbose,
         )
         save_test(output_path, test_code)
-        print(f"         Saved -> {test_relative_path_for_runner}")
+        print(f"        Saved -> {test_relative_path_for_runner}")
     except Exception as err:
-        print(f"         FAILED DURING GENERATION - {file_rel}")
-        print(f"         Error: {err}\n")
+        print(f"        ✗ FAILED DURING GENERATION - {file_rel}")
+        print(f"        Error: {err}\n")
         tracker.mark(file_rel, "fail")
         return False
 
@@ -187,7 +192,7 @@ def process_one_gap(
 
     # attempt to run the test and fix it if it fails
     for attempt in range(1, MAX_FIX_ATTEMPTS + 1):
-        print(f"         Running test (attempt {attempt}/{MAX_FIX_ATTEMPTS})...")
+        print(f"        Running test (attempt {attempt}/{MAX_FIX_ATTEMPTS})...")
 
         # run the test and capture whether it passed and its output
         passed, output = run_single_test(
@@ -198,17 +203,17 @@ def process_one_gap(
         )
         
         if "INFRA_ERROR:" in output:
-            print(f"         INFRA ERROR - {test_relative_path_for_runner}")
+            print(f"        ✗ INFRA ERROR - {test_relative_path_for_runner}")
             print(output)
             tracker.mark(file_rel, "fail")
             return False
 
         if passed:
-            print(f"         PASS - {test_relative_path_for_runner}\n")
+            print(f"        ✓ PASS - {test_relative_path_for_runner}\n")
             tracker.mark(file_rel, "pass")
             return True
 
-        print(f"         FAIL - {test_relative_path_for_runner}")
+        print(f"        ✗ FAIL - {test_relative_path_for_runner}")
 
         error_snippet = extract_relevant_jest_error(output) # extract the most relevant portion of the Jest error output for classification and repair
         failure_type = classify_failure(error_snippet) # classify the failure to determine the most likely cause and best repair approach
@@ -225,11 +230,11 @@ def process_one_gap(
             local_fix = apply_local_failure_fix(before_fix, failure_type) # attempt to apply a local, deterministic fix based on the failure type
             if local_fix is not None and local_fix != before_fix:
                 save_test(output_path, local_fix)
-                print("         Applied local deterministic fix.")
+                print("        ✓ Applied local deterministic fix.")
                 continue
 
             if unchanged_count >= 1:
-                print("         Forcing simplified repair...")
+                print("        Forcing simplified repair...")
                 repair_hint += "\nIMPORTANT: simplify the test to make it pass.\n"
 
             # attempt to fix the test using the LLM. providing the original code the Jest error output the failure classification and a repair hint to guide the fix
@@ -254,14 +259,309 @@ def process_one_gap(
                 print("        ✓ Repair changed the file.")
 
         except Exception as err:
-            print(f"         FAILED DURING REPAIR - {file_rel}")
-            print(f"         Error: {err}\n")
+            print(f"        ✗ FAILED DURING REPAIR - {file_rel}")
+            print(f"        Error: {err}\n")
             tracker.mark(file_rel, "fail")
             return False
 
-    print(f"         GAVE UP AFTER {MAX_FIX_ATTEMPTS} ATTEMPTS - {file_rel}\n")
+    print(f"        ✗ GAVE UP AFTER {MAX_FIX_ATTEMPTS} ATTEMPTS - {file_rel}\n")
     tracker.mark(file_rel, "fail")
     return False
+
+
+# ---------------------------------------------------------------------------
+# C# backend test-generation pipeline
+# ---------------------------------------------------------------------------
+
+    
+def _csharp_detect_project_namespace(project_root: str) -> str:
+    """
+    Detect the main project namespace by reading the RootNamespace from the primary .csproj file, or falling back to the .csproj filename or project root name.
+
+    Args:
+        project_root (str): The root directory of the C# project.
+    Returns:
+        str: The detected project namespace.
+    """
+
+    import re as _re
+    csproj = detect_csharp_project_file(project_root)
+    if csproj:
+        with open(csproj, encoding="utf-8", errors="replace") as f:
+            content = f.read()
+        m = _re.search(r"<RootNamespace>(.*?)</RootNamespace>", content)
+        if m:
+            return m.group(1).strip()
+        return os.path.splitext(os.path.basename(csproj))[0]
+    return os.path.basename(os.path.abspath(project_root))
+
+
+def _get_csharp_test_output_path(
+    file_rel: str,
+    test_project_dir: str,
+) -> str:
+    """
+    Mirror the source file path inside the GeneratedTests directory.
+    e.g. Controllers/UserController.cs ->
+         <test_project_dir>/Controllers/UserControllerTests.cs
+    Args:
+        file_rel (str): The file path relative to the project root, e.g. "Controllers/UserController.cs".
+        test_project_dir (str): The directory where test files are stored.
+    Returns:
+        str: The output path for the generated C# test file.
+    """
+
+    parts = file_rel.replace("\\", "/").split("/")
+    folder_parts = parts[:-1]
+    stem = os.path.splitext(parts[-1])[0]
+    test_filename = f"{stem}Tests.cs"
+    return os.path.join(test_project_dir, *folder_parts, test_filename)
+
+
+def process_one_csharp_file(
+    *,
+    cs_file: dict,
+    project_root: str,
+    test_project_dir: str,
+    project_namespace: str,
+    tracker: ProgressTracker,
+    verbose: bool = False,
+) -> bool:
+    """
+    Generate, build, and run xUnit tests for a single C# source file.
+    
+    Args:
+        cs_file (dict): A dictionary containing the relative and absolute paths of the C# source file.
+        project_root (str): The root directory of the C# project.
+        test_project_dir (str): The directory where test files are stored.
+        project_namespace (str): The namespace of the main project.
+        tracker (ProgressTracker): A tracker to monitor the progress of test generation and execution.
+        verbose (bool): Whether to print verbose output.
+
+    Returns:
+        bool: True on success (all tests pass).
+    """
+
+    file_rel = cs_file["file_relative"]
+    file_abs = cs_file["file_absolute"]
+    strategy = classify_csharp_file(file_rel)
+    test_class_name = infer_test_class_name(file_rel)
+
+    existing_status = tracker.get_status(file_rel)
+    if existing_status == "pass":
+        print(f"↷ ALREADY PASSED (skipping) — {file_rel}\n")
+        return True
+    if existing_status == "skip":
+        print(f"↷ ALREADY SKIPPED (skipping) — {file_rel}\n")
+        return False
+
+    worth_it, reason = should_generate_csharp_test(file_abs, file_rel, verbose=verbose)
+    if not worth_it:
+        print(f"↷ SKIP — {file_rel}")
+        print(f"         Strategy: {strategy}")
+        print(f"         Reason: {reason}\n")
+        tracker.mark(file_rel, "skip")
+        return False
+
+    print(f"✓ GENERATING — {file_rel}")
+    print(f"         Strategy: {strategy}")
+    print(f"         Reason: {reason}")
+
+    output_path = _get_csharp_test_output_path(file_rel, test_project_dir)
+    output_rel = os.path.relpath(output_path, project_root).replace("\\", "/")
+
+    try:
+        test_code = generate_csharp_test(
+            file_absolute=file_abs,
+            file_relative=file_rel,
+            project_namespace=project_namespace,
+            verbose=verbose,
+        )
+        save_test(output_path, test_code)
+        print(f"        ✓ SAVED — {output_rel}")
+    except Exception as e:
+        print(f"        ✗ FAILED DURING GENERATION — {file_rel}")
+        print(f"         Error: {e}\n")
+        tracker.mark(file_rel, "fail")
+        return False
+
+    unchanged_count = 0
+    last_output = ""
+
+    for attempt in range(1, MAX_FIX_ATTEMPTS + 1):
+        print(f"         Building & running test (attempt {attempt}/{MAX_FIX_ATTEMPTS})...")
+
+        passed, output = run_csharp_test(
+            test_project_dir=test_project_dir,
+            test_class_name=test_class_name,
+            timeout_seconds=TEST_TIMEOUT_SECONDS,
+        )
+        last_output = output
+
+        if "INFRA_ERROR:" in output:
+            print(f"         INFRA ERROR — {output_rel}")
+            print(output)
+            tracker.mark(file_rel, "fail")
+            return False
+
+        if passed:
+            print(f"        ✓ PASS — {output_rel}\n")
+            tracker.mark(file_rel, "pass")
+            return True
+
+        print(f"        ✗ FAIL — {output_rel}")
+
+        # --- Infrastructure guard: broken <ProjectReference> in GeneratedTests.csproj ---
+        # This cannot be fixed by editing the test .cs file; the LLM repair loop
+        # would just spin producing identical output forever.  Attempt to auto-repair
+        # GeneratedTests.csproj and retry without consuming an LLM attempt.
+        if is_project_reference_error(output):
+            print(
+                "         Broken <ProjectReference> detected in GeneratedTests.csproj — "
+                "attempting auto-repair..."
+            )
+            if repair_project_reference(test_project_dir, project_root):
+                print("         ProjectReference(s) repaired. Retrying build...")
+                continue  # re-run build without counting this as an LLM attempt
+            else:
+                csproj_hint = os.path.join(test_project_dir, f"{GENERATED_TESTS_DIR}.csproj")
+                print(
+                    f"         INFRA ERROR — Could not locate a real .csproj to reference.\n"
+                    f"         Please add a <ProjectReference> to {csproj_hint} manually,\n"
+                    f"         then delete the progress entry for '{file_rel}' and re-run."
+                )
+                tracker.mark(file_rel, "fail")
+                return False
+        # ---------------------------------------------------------------------------------
+
+        error_snippet = extract_relevant_dotnet_error(output)
+
+        print("\n--- ERROR SENT TO REPAIR LOOP ---")
+        print(error_snippet)
+        print("---------------------------------\n")
+
+        try:
+            before_fix = file_text(output_path)
+
+            fixed_test_code = fix_csharp_test(
+                file_absolute=file_abs,
+                file_relative=file_rel,
+                current_test_code=before_fix,
+                build_error_output=error_snippet,
+                project_namespace=project_namespace,
+                verbose=verbose,
+            )
+
+            save_test(output_path, fixed_test_code)
+            after_fix = file_text(output_path)
+
+            if before_fix == after_fix:
+                unchanged_count += 1
+                print("        ✗ Repair returned identical code.")
+            else:
+                unchanged_count = 0
+                print("        ✓ Repair changed the file.")
+
+        except Exception as err:
+            print(f"        ✗ FAILED DURING REPAIR — {file_rel}")
+            print(f"        Error: {err}\n")
+            tracker.mark(file_rel, "fail")
+            return False
+
+    print(f"        ✗ GAVE UP AFTER {MAX_FIX_ATTEMPTS} ATTEMPTS — {file_rel}")
+
+    analysis = ""
+    last_error = extract_relevant_dotnet_error(last_output)
+    test_code_on_disk = file_text(output_path) if os.path.exists(output_path) else ""
+    try:
+        analysis = explain_csharp_test_failure(
+            file_absolute=file_abs,
+            file_relative=file_rel,
+            test_code=test_code_on_disk,
+            error_output=last_error,
+            verbose=verbose,
+        )
+        print("\n=== LLM FAILURE ANALYSIS ===")
+        print(analysis)
+        print("============================\n")
+    except Exception as exc:
+        print(f"        [LLM] Could not generate failure analysis: {exc}")
+        analysis = f"(analysis unavailable: {exc})"
+
+    tracker.mark(file_rel, "fail")
+    return False
+
+
+def run_csharp_command(args) -> None:
+    """
+    Entry point for the run-csharp subcommand.
+    
+    Args:
+        args: The command line arguments.
+    """
+
+    # validate API key before doing any work
+    validate_api_key()
+
+    project_root = os.path.abspath(args.project)
+
+    if not os.path.isdir(project_root):
+        print(f"ERROR: --project path does not exist or is not a directory: {project_root}")
+        sys.exit(1)
+
+    print(f"C# project: {project_root}\n")
+
+    # bootstrap the GeneratedTests project, repairing broken references if it already exists
+    test_project_dir = bootstrap_csharp_test_project(project_root)
+
+    tracker = ProgressTracker(test_project_dir)
+    if args.reset_progress:
+        tracker.reset()
+        print("\nProgress cache cleared. All files will be re-processed.\n")
+    else:
+        print(f"\nProgress file: {tracker.path}")
+
+    project_namespace = _csharp_detect_project_namespace(project_root)
+    print(f"Main project namespace: {project_namespace}\n")
+
+    cs_files = find_csharp_files(project_root)
+    print(f"=== FOUND {len(cs_files)} C# SOURCE FILES ===\n")
+
+    if not cs_files:
+        print("No eligible C# source files found.")
+        return
+
+    passed_count = 0
+    attempted_count = 0
+
+    for cs_file in cs_files:
+        file_rel = cs_file["file_relative"]
+
+        existing_status = tracker.get_status(file_rel)
+        if existing_status in ("pass", "skip"):
+            label = "ALREADY PASSED" if existing_status == "pass" else "ALREADY SKIPPED"
+            print(f"{label} (skipping) — {file_rel}\n")
+            continue
+
+        if attempted_count >= args.max_files:
+            break
+
+        attempted_count += 1
+        result = process_one_csharp_file(
+            cs_file=cs_file,
+            project_root=project_root,
+            test_project_dir=test_project_dir,
+            project_namespace=project_namespace,
+            tracker=tracker,
+            verbose=args.verbose,
+        )
+        if result:
+            passed_count += 1
+
+    print("=== C# RUN SUMMARY ===")
+    print(f"Processed:               {attempted_count}")
+    print(f"Passing generated tests: {passed_count}")
+    print(f"Failed/skipped:          {attempted_count - passed_count}")
 
 
 def main() -> None:
@@ -307,6 +607,35 @@ def main() -> None:
         help="Path to the target React/TypeScript project",
     )
 
+    # C# backend command
+    run_csharp_parser = subparsers.add_parser(
+        "run-csharp",
+        help="Generate xUnit tests for a C# backend project",
+    )
+    run_csharp_parser.add_argument(
+        "--project",
+        required=True,
+        help="Path to the folder containing the C# source files",
+    )
+    run_csharp_parser.add_argument(
+        "--max-files",
+        type=int,
+        default=DEFAULT_MAX_FILES,
+        help="Maximum number of C# files to process in one run",
+    )
+    run_csharp_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="Print full LLM prompts and responses for debugging",
+    )
+    run_csharp_parser.add_argument(
+        "--reset-progress",
+        action="store_true",
+        default=False,
+        help="Clear saved progress and re-process all files from scratch",
+    )
+
     args = parser.parse_args()
 
     # if the command is "bootstrap" run the Jest bootstrapping process and exit
@@ -314,10 +643,22 @@ def main() -> None:
         project_root = os.path.abspath(args.project)
         bootstrap_jest_project(project_root)
         return
+    
+    # if the command is "run-csharp" run the C# test generation process and exit
+    if args.command == "run-csharp":
+        run_csharp_command(args)
+        return
 
+    # for the "run" command, execute the main test generation pipeline
     validate_api_key()
 
     project_root = os.path.abspath(args.project)
+
+    # sanity check the project path before doing any work
+    if not os.path.isdir(project_root):
+        print(f"ERROR: --project path does not exist or is not a directory: {project_root}")
+        sys.exit(1)
+    
     coverage_json_path = os.path.join(project_root, args.coverage)
 
     print(f"Analyzing project: {project_root}\n")

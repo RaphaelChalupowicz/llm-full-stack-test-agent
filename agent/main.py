@@ -276,7 +276,7 @@ def _run_failure_integration(
     """
     test_code = file_text(output_path) if os.path.exists(output_path) else ""
 
-    # Always ask the LLM to explain the failure — useful even without integration
+    # Always ask the LLM to explain the failure - useful even without integration
     try:
         analysis = explain_test_failure(
             file_absolute=file_abs,
@@ -346,10 +346,10 @@ def process_one_gap(
     # Skip files that were already handled in a previous run
     existing_status = tracker.get_status(file_rel)
     if existing_status == "pass":
-        print(f"↷ ALREADY PASSED (skipping) — {file_rel}\n")
+        print(f"↷ ALREADY PASSED (skipping) - {file_rel}\n")
         return True
     if existing_status == "skip":
-        print(f"↷ ALREADY SKIPPED (skipping) — {file_rel}\n")
+        print(f"↷ ALREADY SKIPPED (skipping) - {file_rel}\n")
         return False
 
     # select a testing strategy based on the file location and name
@@ -581,21 +581,21 @@ def process_one_csharp_file(
 
     existing_status = tracker.get_status(file_rel)
     if existing_status == "pass":
-        print(f"↷ ALREADY PASSED (skipping) — {file_rel}\n")
+        print(f"↷ ALREADY PASSED (skipping) - {file_rel}\n")
         return True
     if existing_status == "skip":
-        print(f"↷ ALREADY SKIPPED (skipping) — {file_rel}\n")
+        print(f"↷ ALREADY SKIPPED (skipping) - {file_rel}\n")
         return False
 
     worth_it, reason = should_generate_csharp_test(file_abs, file_rel, verbose=verbose)
     if not worth_it:
-        print(f"↷ SKIP — {file_rel}")
+        print(f"↷ SKIP - {file_rel}")
         print(f"         Strategy: {strategy}")
         print(f"         Reason: {reason}\n")
         tracker.mark(file_rel, "skip")
         return False
 
-    print(f"✓ GENERATING — {file_rel}")
+    print(f"✓ GENERATING - {file_rel}")
     print(f"         Strategy: {strategy}")
     print(f"         Reason: {reason}")
 
@@ -610,9 +610,9 @@ def process_one_csharp_file(
             verbose=verbose,
         )
         save_test(output_path, test_code)
-        print(f"        ✓ SAVED — {output_rel}")
+        print(f"        ✓ SAVED - {output_rel}")
     except Exception as e:
-        print(f"        ✗ FAILED DURING GENERATION — {file_rel}")
+        print(f"        ✗ FAILED DURING GENERATION - {file_rel}")
         print(f"         Error: {e}\n")
         tracker.mark(file_rel, "fail")
         return False
@@ -631,13 +631,13 @@ def process_one_csharp_file(
         last_output = output
 
         if "INFRA_ERROR:" in output:
-            print(f"         INFRA ERROR — {output_rel}")
+            print(f"         INFRA ERROR - {output_rel}")
             print(output)
             tracker.mark(file_rel, "fail")
             return False
 
         if passed:
-            print(f"        ✓ PASS — {output_rel}\n")
+            print(f"        ✓ PASS - {output_rel}\n")
             jira_key, pr_url = _run_success_integration(
                 reporter=reporter,
                 file_rel=file_rel,
@@ -653,7 +653,7 @@ def process_one_csharp_file(
             tracker.mark(file_rel, "pass", jira_key=jira_key, pr_url=pr_url)
             return True
 
-        print(f"        ✗ FAIL — {output_rel}")
+        print(f"        ✗ FAIL - {output_rel}")
 
         # --- Infrastructure guard: broken <ProjectReference> in GeneratedTests.csproj ---
         # This cannot be fixed by editing the test .cs file; the LLM repair loop
@@ -661,7 +661,7 @@ def process_one_csharp_file(
         # GeneratedTests.csproj and retry without consuming an LLM attempt.
         if is_project_reference_error(output):
             print(
-                "         Broken <ProjectReference> detected in GeneratedTests.csproj — "
+                "         Broken <ProjectReference> detected in GeneratedTests.csproj - "
                 "attempting auto-repair..."
             )
             if repair_project_reference(test_project_dir, project_root):
@@ -670,7 +670,7 @@ def process_one_csharp_file(
             else:
                 csproj_hint = os.path.join(test_project_dir, f"{GENERATED_TESTS_DIR}.csproj")
                 print(
-                    f"         INFRA ERROR — Could not locate a real .csproj to reference.\n"
+                    f"         INFRA ERROR - Could not locate a real .csproj to reference.\n"
                     f"         Please add a <ProjectReference> to {csproj_hint} manually,\n"
                     f"         then delete the progress entry for '{file_rel}' and re-run."
                 )
@@ -707,12 +707,12 @@ def process_one_csharp_file(
                 print("        ✓ Repair changed the file.")
 
         except Exception as err:
-            print(f"        ✗ FAILED DURING REPAIR — {file_rel}")
+            print(f"        ✗ FAILED DURING REPAIR - {file_rel}")
             print(f"        Error: {err}\n")
             tracker.mark(file_rel, "fail")
             return False
 
-    print(f"        ✗ GAVE UP AFTER {MAX_FIX_ATTEMPTS} ATTEMPTS — {file_rel}")
+    print(f"        ✗ GAVE UP AFTER {MAX_FIX_ATTEMPTS} ATTEMPTS - {file_rel}")
 
     analysis = ""
     last_error = extract_relevant_dotnet_error(last_output)
@@ -817,7 +817,7 @@ def run_csharp_command(args) -> None:
         existing_status = tracker.get_status(file_rel)
         if existing_status in ("pass", "skip"):
             label = "ALREADY PASSED" if existing_status == "pass" else "ALREADY SKIPPED"
-            print(f"{label} (skipping) — {file_rel}\n")
+            print(f"{label} (skipping) - {file_rel}\n")
             continue
 
         if attempted_count >= args.max_files:
@@ -1041,11 +1041,11 @@ def main() -> None:
     for gap in gaps:
         file_rel = gap["file_relative"]
 
-        # Already handled in a previous run — notify but don't consume quota
+        # Already handled in a previous run - notify but don't consume quota
         existing_status = tracker.get_status(file_rel)
         if existing_status in ("pass", "skip"):
             label = "ALREADY PASSED" if existing_status == "pass" else "ALREADY SKIPPED"
-            print(f"↷ {label} (skipping) — {file_rel}\n")
+            print(f"↷ {label} (skipping) - {file_rel}\n")
             continue
 
         if attempted_count >= args.max_files:

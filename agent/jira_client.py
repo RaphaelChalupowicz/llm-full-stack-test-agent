@@ -101,7 +101,7 @@ class JiraClient:
 
         epic_key: if provided, sets the 'parent' field (works for
                   team-managed / next-gen projects).  Classic projects
-                  may need a custom epic-link field — see JIRA_EPIC_FIELD.
+                  may need a custom epic-link field - see JIRA_EPIC_FIELD.
         """
         fields: dict = {
             "project": {"key": self._project_key},

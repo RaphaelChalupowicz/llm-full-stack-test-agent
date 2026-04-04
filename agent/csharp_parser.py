@@ -73,7 +73,7 @@ def find_csharp_files(project_root: str) -> list[dict]:
             "file_absolute": "/abs/path/Controllers/UserController.cs",
         }
     """
-    
+
     project_root = os.path.abspath(project_root)
     results: list[dict] = []
 
@@ -262,7 +262,7 @@ def detect_target_framework(project_root: str) -> str:
     if match:
         return match.group(1).strip()
 
-    # Multiple frameworks — take the first one
+    # Multiple frameworks - take the first one
     multi = re.search(r"<TargetFrameworks>(.*?)</TargetFrameworks>", content)
     if multi:
         return multi.group(1).split(";")[0].strip()

@@ -157,7 +157,7 @@ def build_system_prompt(strategy: str) -> str:
     base = (
         "You are a senior C# backend engineer. "
         "You write clean, well-structured xUnit 2.x unit tests for .NET projects. "
-        "Return ONLY the raw C# test file content — no explanation, no markdown fences.\n\n"
+        "Return ONLY the raw C# test file content - no explanation, no markdown fences.\n\n"
         "General rules:\n"
         "- Use xUnit attributes: [Fact] for simple tests, [Theory] + [InlineData] for parameterised tests\n"
         "- Follow the Arrange / Act / Assert pattern with blank lines between sections\n"
@@ -471,7 +471,7 @@ def fix_csharp_test(
             "content": (
                 "You are a senior C# backend engineer. "
                 "Fix the provided xUnit test file so that it compiles and all tests pass. "
-                "Return ONLY the complete fixed C# test file — no explanation, no markdown fences.\n\n"
+                "Return ONLY the complete fixed C# test file - no explanation, no markdown fences.\n\n"
                 "Rules:\n"
                 "- Do not remove tests; fix them\n"
                 "- Correct any wrong using directives\n"
@@ -527,7 +527,7 @@ def explain_csharp_test_failure(
 ) -> str:
     """
     Ask the LLM to provide a human-readable explanation of why a C# test failed.
-    
+
     Args:
         file_absolute (str): The absolute path to the C# source file.
         file_relative (str): The file path relative to the project root.

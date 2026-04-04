@@ -14,7 +14,7 @@ Failure flow:
   3. Open a *draft* Bitbucket PR with the LLM analysis in the description.
   4. Attach the draft PR URL as a remote link on the Jira issue.
 
-Both Jira and Bitbucket are optional — if a client is None the corresponding
+Both Jira and Bitbucket are optional - if a client is None the corresponding
 steps are skipped.  Failures in either integration are caught and printed as
 warnings so they never break the main agent loop.
 """
@@ -455,7 +455,7 @@ class IntegrationReporter:
             pr_url: The Bitbucket PR URL if a PR was created, or None.
             draft: A boolean indicating whether the PR is a draft (for failures).
         """
-        
+
         parts = []
         if jira_key:
             parts.append(f"Jira: {jira_key}")

@@ -43,6 +43,7 @@ DEFAULT_MAX_FILES = _env_int("DEFAULT_MAX_FILES", 2)
 DEFAULT_COVERAGE_PATH = os.getenv("DEFAULT_COVERAGE_PATH", "coverage/coverage-summary.json")
 TEST_TIMEOUT_SECONDS = _env_int("TEST_TIMEOUT_SECONDS", 120)
 
+
 def validate_api_key() -> None:
     """
     Validates that the OpenAI API key is configured.
@@ -176,10 +177,10 @@ def process_one_gap(
             verbose=verbose,
         )
         save_test(output_path, test_code)
-        print(f"         Saved -> {test_relative_path_for_runner}")
+        print(f"        Saved -> {test_relative_path_for_runner}")
     except Exception as err:
-        print(f"         FAILED DURING GENERATION - {file_rel}")
-        print(f"         Error: {err}\n")
+        print(f"        ✗ FAILED DURING GENERATION - {file_rel}")
+        print(f"        Error: {err}\n")
         tracker.mark(file_rel, "fail")
         return False
 
@@ -187,7 +188,7 @@ def process_one_gap(
 
     # attempt to run the test and fix it if it fails
     for attempt in range(1, MAX_FIX_ATTEMPTS + 1):
-        print(f"         Running test (attempt {attempt}/{MAX_FIX_ATTEMPTS})...")
+        print(f"        Running test (attempt {attempt}/{MAX_FIX_ATTEMPTS})...")
 
         # run the test and capture whether it passed and its output
         passed, output = run_single_test(
@@ -198,17 +199,17 @@ def process_one_gap(
         )
         
         if "INFRA_ERROR:" in output:
-            print(f"         INFRA ERROR - {test_relative_path_for_runner}")
+            print(f"        ✗ INFRA ERROR - {test_relative_path_for_runner}")
             print(output)
             tracker.mark(file_rel, "fail")
             return False
 
         if passed:
-            print(f"         PASS - {test_relative_path_for_runner}\n")
+            print(f"        ✓ PASS - {test_relative_path_for_runner}\n")
             tracker.mark(file_rel, "pass")
             return True
 
-        print(f"         FAIL - {test_relative_path_for_runner}")
+        print(f"        ✗ FAIL - {test_relative_path_for_runner}")
 
         error_snippet = extract_relevant_jest_error(output) # extract the most relevant portion of the Jest error output for classification and repair
         failure_type = classify_failure(error_snippet) # classify the failure to determine the most likely cause and best repair approach
@@ -225,11 +226,11 @@ def process_one_gap(
             local_fix = apply_local_failure_fix(before_fix, failure_type) # attempt to apply a local, deterministic fix based on the failure type
             if local_fix is not None and local_fix != before_fix:
                 save_test(output_path, local_fix)
-                print("         Applied local deterministic fix.")
+                print("        ✓ Applied local deterministic fix.")
                 continue
 
             if unchanged_count >= 1:
-                print("         Forcing simplified repair...")
+                print("        Forcing simplified repair...")
                 repair_hint += "\nIMPORTANT: simplify the test to make it pass.\n"
 
             # attempt to fix the test using the LLM. providing the original code the Jest error output the failure classification and a repair hint to guide the fix
@@ -254,12 +255,12 @@ def process_one_gap(
                 print("        ✓ Repair changed the file.")
 
         except Exception as err:
-            print(f"         FAILED DURING REPAIR - {file_rel}")
-            print(f"         Error: {err}\n")
+            print(f"        ✗ FAILED DURING REPAIR - {file_rel}")
+            print(f"        Error: {err}\n")
             tracker.mark(file_rel, "fail")
             return False
 
-    print(f"         GAVE UP AFTER {MAX_FIX_ATTEMPTS} ATTEMPTS - {file_rel}\n")
+    print(f"        ✗ GAVE UP AFTER {MAX_FIX_ATTEMPTS} ATTEMPTS - {file_rel}\n")
     tracker.mark(file_rel, "fail")
     return False
 

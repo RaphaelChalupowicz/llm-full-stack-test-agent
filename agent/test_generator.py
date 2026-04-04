@@ -33,6 +33,7 @@ MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
 CLASSIFY_MAX_TOKENS = _env_int("OPENAI_MAX_TOKENS_CLASSIFY", 120)
 GENERATE_MAX_TOKENS = _env_int("OPENAI_MAX_TOKENS_GENERATE", 2600)
 REPAIR_MAX_TOKENS = _env_int("OPENAI_MAX_TOKENS_REPAIR", 3200)
+EXPLAIN_MAX_TOKENS = _env_int("OPENAI_MAX_TOKENS_EXPLAIN", 1500)
 GENERATE_TEMPERATURE = _env_float("OPENAI_TEMPERATURE_GENERATE", 0.1)
 REPAIR_TEMPERATURE = _env_float("OPENAI_TEMPERATURE_REPAIR", 0)
 
@@ -572,3 +573,83 @@ def fix_test_after_failure(
         print(f"\n--- LLM REPAIR RESPONSE ---\n{raw}\n---------------------------\n")
 
     return cleanup_generated_test(raw, file_relative)
+
+
+def explain_test_failure(
+    *,
+    file_absolute: str,
+    file_relative: str,
+    test_code: str,
+    jest_error: str,
+    failure_type: str,
+    verbose: bool = False,
+) -> str:
+    """
+    Provides a detailed explanation for why a generated test is failing, along with actionable guidance for fixing it.
+
+    Args:
+        file_absolute: The absolute path to the source file under test.
+        file_relative: The relative path to the source file under test.
+        test_code: The code of the generated test that failed.
+        jest_error: The Jest error output.
+        failure_type: A classification of the failure type.
+        verbose: A boolean indicating whether to print verbose output.
+    Returns:
+        str: A markdown-formatted string explaining the failure and providing guidance for fixing it.
+    """
+
+    with open(file_absolute, encoding="utf-8") as f:
+        source_code = f.read()
+
+    client = get_client()
+
+    user_content = (
+        f"A Jest test was automatically generated for `{file_relative}` but "
+        f"failed to pass after all repair attempts.\n\n"
+        f"**Source file under test:**\n```tsx\n{source_code}\n```\n\n"
+        f"**Last generated test (that failed):**\n```tsx\n{test_code}\n```\n\n"
+        f"**Jest error output:**\n```\n{jest_error}\n```\n\n"
+        f"**Failure classification:** {failure_type}\n\n"
+        f"Please provide:\n"
+        f"1. **Root cause** — why is this test failing?\n"
+        f"2. **Key challenges** — what makes this file hard to test automatically?\n"
+        f"3. **Recommended approach** — step-by-step guide for a developer to "
+        f"write a passing test manually\n"
+        f"4. **Code patterns** — specific mocks, utilities, or techniques to use\n"
+        f"5. **Minimum viable test** — a minimal test case likely to pass as a "
+        f"starting point\n\n"
+        f"Be specific, practical, and concise.  A developer should be able to act "
+        f"on this within 30 minutes."
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a senior React/TypeScript testing expert helping a developer "
+                "understand why an automatically generated test failed and how to fix it. "
+                "Use markdown formatting (headings, code blocks) for readability."
+            ),
+        },
+        {"role": "user", "content": user_content},
+    ]
+
+    if verbose:
+        print("\n--- LLM EXPLAIN FAILURE PROMPT ---")
+        print(f"[user]\n{user_content}\n")
+        print("----------------------------------\n")
+
+    response = _call_llm(
+        client,
+        model=MODEL,
+        messages=messages,
+        temperature=0.2,
+        max_completion_tokens=EXPLAIN_MAX_TOKENS,
+    )
+
+    analysis = extract_text(response)
+
+    if verbose:
+        print(f"\n--- LLM EXPLAIN FAILURE RESPONSE ---\n{analysis}\n------------------------------------\n")
+
+    return analysis

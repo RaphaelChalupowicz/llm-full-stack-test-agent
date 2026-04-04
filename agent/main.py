@@ -1026,7 +1026,7 @@ def main() -> None:
         no_integration=args.no_integration,
     )
     if args.dry_run:
-        print("DRY-RUN mode: no external API calls will be made.\n")
+        print("DRY-RUN mode: no Jira/Bitbucket integration API calls will be made.\n")
 
     # get the list of coverage gaps from the coverage summary or source scan
     gaps = get_coverage_gaps(coverage_json_path, project_root)

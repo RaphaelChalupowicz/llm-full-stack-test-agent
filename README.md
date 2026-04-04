@@ -124,7 +124,7 @@ pip install -r requirements.txt
 
 cp .env.example .env
 
-4. Edit .env and set OPENAI_API_KEY and optionally Jira/Bitbucket credentials
+5. Edit .env and set OPENAI_API_KEY and optionally Jira/Bitbucket credentials
 ```
 
 You can tune runtime behavior without code changes:

@@ -908,7 +908,7 @@ def main() -> None:
         default=False,
         help=(
             "Simulate Jira/Bitbucket integration: log what would be created "
-            "without making any external API calls"
+            "without making Jira/Bitbucket integration API calls"
         ),
     )
     run_parser.add_argument(

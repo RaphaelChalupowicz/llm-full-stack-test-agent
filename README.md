@@ -16,7 +16,7 @@ Given a React project, the agent:
 6. Runs tests locally
 7. If the test fails → analyzes the error and fixes it (deterministic AND LLM repair loop)
 8. Retries until the test passes or max attempts are reached
-9. **Saves progress** so re runs skip already passing files
+9. **Saves progress** so reruns skip already passing files
 10. **On success** → opens a Jira issue + Bitbucket PR and links them
 11. **On failure** → asks the LLM to explain the root cause, opens a "needs-work" Jira issue + draft PR with the developer guide
 

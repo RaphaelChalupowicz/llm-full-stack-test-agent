@@ -118,7 +118,8 @@ def parse_csharp_file(file_absolute: str) -> dict:
     Args:
         file_absolute (str): The absolute path to the C# file to parse.
     Returns:
-        dict: A dictionary containing the namespace, classes, public methods, and source code of the
+        dict: A dictionary containing the parsed namespace, classes,
+            public methods, and the full source code of the file.
     """
 
     with open(file_absolute, encoding="utf-8", errors="replace") as f:

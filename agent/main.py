@@ -122,7 +122,10 @@ def _build_integration_reporter(
                 "(CSHARP_JIRA_* or shared JIRA_* vars not fully set)"
             )
         else:
-            print("Jira integration: disabled (JIRA_URL/EMAIL/TOKEN/PROJECT_KEY not fully set)")
+            print(
+                "Jira integration: disabled "
+                "(JIRA_URL/JIRA_EMAIL/JIRA_TOKEN/JIRA_PROJECT_KEY not fully set)"
+            )
 
     bb_workspace = _env_prefixed("BITBUCKET_WORKSPACE")
     bb_repo = _env_prefixed("BITBUCKET_REPO_SLUG")

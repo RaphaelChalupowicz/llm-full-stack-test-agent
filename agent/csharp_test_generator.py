@@ -515,3 +515,71 @@ def fix_csharp_test(
         print(f"\n--- LLM REPAIR RESPONSE (C#) ---\n{raw}\n--------------------------------\n")
 
     return cleanup_generated_csharp_test(raw)
+
+
+def explain_csharp_test_failure(
+    *,
+    file_absolute: str,
+    file_relative: str,
+    test_code: str,
+    error_output: str,
+    verbose: bool = False,
+) -> str:
+    """
+    Ask the LLM to provide a human-readable explanation of why a C# test failed.
+    
+    Args:
+        file_absolute (str): The absolute path to the C# source file.
+        file_relative (str): The file path relative to the project root.
+        test_code (str): The content of the test file.
+        error_output (str): The error output from the test run.
+        verbose (bool): Whether to print detailed information about the LLM's decision.
+    Returns:
+        str: A human-readable explanation of the test failure.
+    """
+    metadata = parse_csharp_file(file_absolute)
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a senior C# backend engineer. "
+                "Analyse the provided test failure and give a concise explanation:\n"
+                "1. Root cause of the failure\n"
+                "2. What needs to change in the test or source code\n"
+                "3. Any architectural observations\n"
+                "Be brief and actionable."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Source file: {file_relative}\n\n"
+                f"Source code:\n```csharp\n{metadata['source']}\n```\n\n"
+                f"Test file:\n```csharp\n{test_code}\n```\n\n"
+                f"Error output:\n```\n{error_output}\n```"
+            ),
+        },
+    ]
+
+    if verbose:
+        print("\n--- LLM EXPLAIN PROMPT (C#) ---")
+        for m in messages:
+            print(f"[{m['role']}]\n{m['content']}\n")
+        print("-------------------------------\n")
+
+    client = get_client()
+    response = _call_llm(
+        client,
+        model=MODEL,
+        messages=messages,
+        temperature=0,
+        max_completion_tokens=_env_int("OPENAI_MAX_TOKENS_EXPLAIN", 1500),
+    )
+
+    raw = extract_text(response)
+
+    if verbose:
+        print(f"\n--- LLM EXPLAIN RESPONSE (C#) ---\n{raw}\n---------------------------------\n")
+
+    return raw
